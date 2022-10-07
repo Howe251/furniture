@@ -23,19 +23,23 @@ class Limitations:
     # SYMBOLS = [k for k in locals().keys() if not k.startswith('_')]
 
 
-class Product(Limitations):
+class Product:
     # wood = 0
     # metal = 0
     # glass = 0
-    prcosts = [0,0,0]
-    cost = 0
+    # minCosts = [5, 3, 1]  # Минимальная стоимость: дерево, металл, стекло
+    # maxCosts = [10, 8, 4]  # Максимальная стоимость: дерево, металл, стекло
+    # prcosts = [0,0,0]
+    # cost = 0
     work = False
 
     def __init__(self):
-        self.prcosts[0] = randint(self.minCosts[0], self.maxCosts[0])
-        self.prcosts[1] = randint(self.minCosts[1], self.maxCosts[1])
-        self.prcosts[2] = randint(self.minCosts[2], self.maxCosts[2])
+        self.prcosts = [0,0,0]
+        self.prcosts[0] = randint(Individ.minCosts[0], Individ.maxCosts[0])
+        self.prcosts[1] = randint(Individ.minCosts[1], Individ.maxCosts[1])
+        self.prcosts[2] = randint(Individ.minCosts[2], Individ.maxCosts[2])
         self.cost = randint(1, 100)
+        # self.work = True if randint(0, 1)==0 else False
         # self.fitness = self.wood*0.5 + self.metal*0.2 + self.glass*0.15
 
     def set(self, wood, metal, glass, cost, work=False):
@@ -59,24 +63,22 @@ def weight(s, c):
     return weight
 
 
-# individ = {
-#     'fitnes': 0,
-#     'use': []
-#     }
-
-
 class Individ(Limitations):
-    fitness = 0
-    use = []
+    def __init__(self):
+        self.fitness = 0
+        self.use = []
+        self.onlyUse = []
 
     def setWork(self, weight, products):
         self.use.clear()
+        self.onlyUse.clear()
         self.fitness = 0
         for i in range(len(products)):
             k = randint(0, len(products))
             if k < weight:
                 products[i].work = True
                 self.use.append(products[i])
+                self.onlyUse.append(products[i])
                 self.fitness += products[i].cost
             else:
                 self.use.append(products[i])
@@ -84,12 +86,6 @@ class Individ(Limitations):
 
     def checkWorth(self): #individ, stocks):
         individCost = [0, 0, 0]
-        fit = 0
-        k = 0
-        for i in self.use:
-            if i.work:
-                k += 1
-        print(k)
         for k, person in enumerate(self.use):
             if person.work:
                 for i in range(len(self.limits)):
@@ -97,8 +93,20 @@ class Individ(Limitations):
                     if individCost[i] > self.limits[i]:
                         self.fitness = -1
                         return False
-                fit += person.cost
         return True
+
+def crossingOver(first, second):
+    crossedInd = []
+    for i in range(len(first)):
+        chose = randint(0,1)
+        if first[i].work == second[i].work:
+            crossedInd.append(first[i].work)
+        else:
+            if chose > 0:
+                crossedInd.append(first[i].work)
+            else:
+                crossedInd.append(second[i].work)
+    return crossedInd
 
 
 def mutation(product):
@@ -113,9 +121,9 @@ def write(i, p):
 
 if __name__ == "__main__":
     # random.seed("34567")
-    read = input("Read? y/n")
+    read = input("Read? y/n").lower()
     while "y" != read != "n":
-        read = input("Read? y/n")
+        read = input("Read? y/n").lower()
     if read.lower() == "y":
         f = []
         with open("input.txt", "r") as file:
@@ -125,6 +133,7 @@ if __name__ == "__main__":
                                      metal=product[product.find("M") + 1:product.find("$$")],
                                      glass=product[product.find("G") + 1:product.find("%%")],
                                      cost=product[product.find("C") + 1::].rstrip()))
+        file.close()
     else:
         f = [Product() for p in range(itemsSize)]
         if input("Save in file? y/n").lower() == "y":
@@ -135,7 +144,7 @@ if __name__ == "__main__":
                 for i, p in enumerate(f):
                     file.write(f"{i}:M{p.metal}$$G{p.glass}%%W{p.wood};;C{p.cost}\n")
     # sor = sorted(f, key=lambda fitness: fitness.fitness)
-    # Вывод отсортированной генерации в консоль
+    # Вывод генерации в консоль
     for i, p in enumerate(f):
         print(write(i, p))
     # Рандомно выбираем индивидов которых будем использовать (Создание популяции)
@@ -143,18 +152,26 @@ if __name__ == "__main__":
     weightmax = weight(Limitations.limits, Limitations.maxCosts)
     pop = []
     while len(pop) < population:
-        Ind = Individ().setWork(randint(weightmax, weightmin), copy.deepcopy(f))
+        Ind = Individ.setWork(Individ(), randint(weightmax, weightmin), copy.deepcopy(f))
         if Ind.checkWorth():
             pop.append(Ind)
+    fitnesmax = [max(pop, key=lambda fitness: fitness.fitness).fitness]
+    fitnesavg = [sum(i.fitness for i in pop)/len(pop)]
 
-
-    # while i < len(f):  #  сортировка по убыванию фитнесс функции
-    #     # print(f"f {f[i].fitness} sor {sor[i].fitness}")
-    #     print(f"m{sor[i].metal} w{sor[i].wood} g{sor[i].glass}  f{sor[i].fitness}")
-    #     i += 1
-    # for i in range(len(sor)):
-    #     sor[i] = sor[i].fitness
+    generations = [pop]
+    n = True
     for i in range(loopSize):  # тут цикл отбора и мутаций
+        for p in generations:
+            p = sorted(p, reverse=True, key=lambda fitness: fitness.fitness)
+            first = randint(0, len(p))
+            second = randint(0, len(p))
+            while first == second:
+                second = randint(0, len(p))
+
+
+
+
+        # for поколения in generation отбор и мутация
         pass
     plt.rc('axes', unicode_minus=False)
     fig, ax = plt.subplots(figsize=(5, 3))
